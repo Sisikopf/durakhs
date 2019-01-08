@@ -1,23 +1,31 @@
 module Durak.GameLogic
-    (startState) where
+    (startGame, startState, putCardOnTable) where
 
 import Durak.Models
+import Durak.UI
 
 startState :: GameState
-startState = GameState {
-                currentPlayerId = 1,
-                defendingPlayerId = 2,
-                roundNum = 1,
-                players = [
-                    Human 1 "You" [Card Six Hearts, Card Ace Spades],
-                    AI 2 "Trus" [Card Seven Spades],
-                    AI 3 "Balbes" [Card Jack Diamonds],
-                    AI 4 "Byvaliy" [Card Ace Clubs]
-                ],
-                deck = [Card Ten Hearts, Card Jack Clubs, Card Six Diamonds],
-                trump = Clubs,
-                table = [
-                    CardPair (Card Eight Hearts) (Just (Card Jack Hearts)),
-                    CardPair (Card Eight Diamonds) Nothing
-                ]
-             }
+startState =
+    (GameState 1 2 1 initializedPlayers readyDeck trump [])
+    where
+        readyDeck = tail deckAfterGiveaway ++ [head deckAfterGiveaway]
+        trump = getSuit $ head deckAfterGiveaway
+        deckAfterGiveaway = drop 24 fullDeck
+        initializedPlayers = [
+            Human 1 "You" (take 6 fullDeck),
+            AI 2 "Trus" (take 6 (drop 6 fullDeck)),
+            AI 3 "Balbes" (take 6 (drop 12 fullDeck)),
+            AI 4 "Byvaliy" (take 6 (drop 18 fullDeck))]
+        fullDeck = [Card rank suit | rank <- [Six .. Ace], suit <- [Clubs .. Spades]]
+
+putCardOnTable :: Card -> GameState -> GameState
+putCardOnTable card (GameState cur def ro pls deck tr table) =
+    (GameState cur def ro pls deck tr newTable)
+    where newTable = case table of
+            [] -> [CardPair card Nothing]
+            curTable@((CardPair _ (Just _)):_) -> (CardPair card Nothing):curTable
+            curTable@((CardPair prevCard Nothing):_) -> (CardPair prevCard (Just card)):(tail curTable)
+
+startGame :: IO()
+startGame = do
+   printState startState

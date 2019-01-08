@@ -3,4 +3,4 @@ import Durak.UI
 import Durak.GameLogic
 
 main :: IO()
-main = printState startState
+main = startGame

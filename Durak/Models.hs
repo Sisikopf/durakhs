@@ -11,9 +11,10 @@ module Durak.Models
     , GameState(..)
     , getPlayerId
     , getPlayerName
+    , getSuit
     ) where
 
-data Rank = Six | Seven | Eight | Nine | Ten | Jack | Queen | King | Ace
+data Rank = Six | Seven | Eight | Nine | Ten | Jack | Queen | King | Ace deriving Enum
 instance Show Rank where
     show Six = "6"
     show Seven = "7"
@@ -25,7 +26,7 @@ instance Show Rank where
     show King = "K"
     show Ace = "A"
 
-data Suit = Clubs | Diamonds | Hearts | Spades
+data Suit = Clubs | Diamonds | Hearts | Spades deriving Enum
 instance Show Suit where
     show Clubs = "♣"
     show Diamonds = "♦"
@@ -34,8 +35,10 @@ instance Show Suit where
 
 type Trump = Suit
 data Card = Card Rank Suit
+getSuit (Card _ suit) = suit
 instance Show Card where
     show (Card rank suit) = show rank ++ (show suit)
+    showList [] = (\y -> "")
     showList (card:[]) = (\y -> show card)
     showList (card:cards) = (\y -> show card ++ " " ++ (show cards))
 
@@ -50,6 +53,7 @@ data CardPair = CardPair Card (Maybe Card)
 instance Show CardPair where
     show (CardPair card Nothing) = show card
     show (CardPair card (Just anotherCard)) = show card ++ "/" ++ (show anotherCard)
+    showList [] = (\y -> "")
     showList (cardPair:[]) = (\y -> show cardPair)
     showList (cardPair:cardPairs) = (\y -> show cardPair ++ " " ++ (show cardPairs))
 
