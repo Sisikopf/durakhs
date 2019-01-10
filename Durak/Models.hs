@@ -9,12 +9,10 @@ module Durak.Models
     , Player(..)
     , Table(..)
     , GameState(..)
-    , getPlayerId
-    , getPlayerName
     , getSuit
     ) where
 
-data Rank = Six | Seven | Eight | Nine | Ten | Jack | Queen | King | Ace deriving Enum
+data Rank = Six | Seven | Eight | Nine | Ten | Jack | Queen | King | Ace deriving (Enum, Eq)
 instance Show Rank where
     show Six = "6"
     show Seven = "7"
@@ -26,7 +24,7 @@ instance Show Rank where
     show King = "K"
     show Ace = "A"
 
-data Suit = Clubs | Diamonds | Hearts | Spades deriving Enum
+data Suit = Clubs | Diamonds | Hearts | Spades deriving (Enum, Eq)
 instance Show Suit where
     show Clubs = "♣"
     show Diamonds = "♦"
@@ -34,7 +32,7 @@ instance Show Suit where
     show Spades = "♠"
 
 type Trump = Suit
-data Card = Card Rank Suit
+data Card = Card Rank Suit deriving Eq
 getSuit (Card _ suit) = suit
 instance Show Card where
     show (Card rank suit) = show rank ++ (show suit)
@@ -44,11 +42,13 @@ instance Show Card where
 
 type Hand = [Card]
 type Deck = [Card]
-data Player = Human Int String Hand | AI Int String Hand
-getPlayerId (Human id _ _) = id
-getPlayerId (AI id _ _) = id
-getPlayerName (Human _ name _) = name
-getPlayerName (AI _ name _) = name
+data Player = Player {
+    id :: Int,
+    name :: String,
+    isAi :: Bool,
+    hand :: Hand
+} deriving Eq
+
 data CardPair = CardPair Card (Maybe Card)
 instance Show CardPair where
     show (CardPair card Nothing) = show card
@@ -59,10 +59,10 @@ instance Show CardPair where
 
 type Table = [CardPair]
 data GameState = GameState {
-                    currentPlayerId :: Int,
-                    defendingPlayerId :: Int,
+                    currentPlayer :: Player,
+                    defendingPlayer :: Player,
+                    otherPlayers :: [Player],
                     roundNum :: Int,
-                    players :: [Player],
                     deck :: Deck,
                     trump :: Trump,
                     table :: Table
