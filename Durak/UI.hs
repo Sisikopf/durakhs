@@ -1,8 +1,10 @@
 module Durak.UI
     ( printState
     , printLoser
-    , askForCardNumber
-    , askForOneMoreCardNumber
+    , askForStartAttackingMove
+    , askForContinueAttackingMove
+    , askForStartDefendingMove
+    , askForContinueDefendingMove
     ) where
 
 import System.Console.ANSI
@@ -43,14 +45,14 @@ printTable table = do
 
 printPlayers :: [Player] -> IO()
 printPlayers players = do
-    setCursorPosition 25 50
-    printPlayer $ getPlayerById 1 players
+    setCursorPosition 22 50
+    printPlayer $ getPlayerById 0 players
     setCursorPosition 12 0
-    printPlayer $ getPlayerById 2 players
+    printPlayer $ getPlayerById 1 players
     setCursorPosition 0 50
-    printPlayer $ getPlayerById 3 players
+    printPlayer $ getPlayerById 2 players
     setCursorPosition 12 100
-    printPlayer $ getPlayerById 4 players
+    printPlayer $ getPlayerById 3 players
 
 printPlayer :: Player -> IO()
 printPlayer (Player _ name False hand) = putStr $ show hand
@@ -71,16 +73,30 @@ printLoser (GameState currentPlayer defendingPlayer otherPlayers _ _ _ _) = do
     setCursorPosition 50 50
     putStr $ (show $ name $ head (filter (\ (Player _ _ _ hand)-> length hand /= 0) (currentPlayer:defendingPlayer:otherPlayers))) ++ " lost"
 
-askForCardNumber :: IO Int
-askForCardNumber = do
+askForStartAttackingMove :: GameState -> IO Card
+askForStartAttackingMove (GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
     putStr "Choose card from your hand (1-N): "
     cardNumStr <- getLine
     let cardNum = read cardNumStr :: Int
-    return (cardNum - 1)
+    return $ hand !! (cardNum - 1)
 
-askForOneMoreCardNumber :: IO Int
-askForOneMoreCardNumber = do
+askForContinueAttackingMove :: GameState -> IO (Maybe Card)
+askForContinueAttackingMove (GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
     putStr "Choose one more card from your hand or finish your move (0): "
     cardNumStr <- getLine
     let cardNum = read cardNumStr :: Int
-    return (cardNum - 1)
+    return $ if cardNum == 0 then Nothing else Just (hand !! (cardNum - 1))
+
+askForStartDefendingMove :: GameState -> IO Card
+askForStartDefendingMove (GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
+    putStr "Choose card from your hand (1-N): "
+    cardNumStr <- getLine
+    let cardNum = read cardNumStr :: Int
+    return $ hand !! (cardNum - 1)
+
+askForContinueDefendingMove :: GameState -> IO (Maybe Card)
+askForContinueDefendingMove (GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
+    putStr "Choose one more card from your hand or finish your move (0): "
+    cardNumStr <- getLine
+    let cardNum = read cardNumStr :: Int
+    return $ if cardNum == 0 then Nothing else Just (hand !! (cardNum - 1))
