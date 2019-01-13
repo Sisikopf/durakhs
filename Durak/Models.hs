@@ -9,6 +9,7 @@ module Durak.Models
     , Player(..)
     , Table(..)
     , GameState(..)
+    , DefendingAction(..)
     , getSuit
     ) where
 
@@ -67,3 +68,5 @@ data GameState = GameState {
                     trump :: Trump,
                     table :: Table
                  }
+
+data DefendingAction = Take | Cover Card | Transit Card

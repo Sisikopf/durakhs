@@ -56,7 +56,7 @@ nextMove gameState@(GameState currentPlayer defendingPlayer _ _ _ _ _) = do
     newGameState <- if currentPlayer == defendingPlayer
                         then nextDefendingMove gameState
                         else nextAttackingMove gameState
-    return $ nextPlayer newGameState
+    return $ nextPlayer newGameState -- nextRound here
 
 nextPlayer :: GameState -> GameState
 nextPlayer (GameState currentPlayer@(Player plId name isAi hand) defendingPlayer@(Player defPlId _ _ _) pls ro deck tr table) =
@@ -70,18 +70,21 @@ nextPlayer (GameState currentPlayer@(Player plId name isAi hand) defendingPlayer
         newCurrentPlayer@(Player newPlId name isAi newHand) =
             head $ filter (\ (Player pid _ _ _) -> pid == mod (plId + 1) 4) (defendingPlayer:pls)
 
-nextDefendingMove :: GameState -> IO GameState
-nextDefendingMove gameState = do
-    newGameState <- startDefendingMove gameState
-    newGameState <- continueDefendingMove newGameState
-    printState newGameState
-    return newGameState
+nextDefendingPlayer :: GameState -> GameState
+nextDefendingPlayer (GameState currentPlayer@(Player plId name isAi hand) defendingPlayer@(Player defPlId _ _ _) pls ro deck tr table) =
+    (GameState currentPlayer newDefendingPlayer (tail pls) ro deck tr table)
+    where
+        newDefendingPlayer@(Player newPlId name isAi newHand) =
+            head $ filter (\ (Player pid _ _ _) -> pid == mod (plId + 1) 4) (currentPlayer:pls)
 
 
 nextAttackingMove :: GameState -> IO GameState
-nextAttackingMove gameState = do
-    newGameState <- startAttackingMove gameState
-    newGameState <- continueAttackingMove newGameState
+nextAttackingMove gameState@(GameState _ _ _ _ _ _ table) = do
+    newGameState <- case table of
+        [] -> do
+             newGameState <- startAttackingMove gameState
+             continueAttackingMove newGameState
+        _ -> continueAttackingMove gameState
     printState newGameState
     return newGameState
 
@@ -98,18 +101,62 @@ continueAttackingMove gameState = do
         then continueAttackingMove (putAttackingCardOnTable (fromJust card) gameState)
         else return gameState
 
+nextDefendingMove :: GameState -> IO GameState
+nextDefendingMove gameState = do
+    newGameState <- startDefendingMove gameState
+    newNewGameState <- continueDefendingMove newGameState
+    printState newNewGameState
+    return newNewGameState
+
 startDefendingMove :: GameState -> IO GameState
 startDefendingMove gameState = do
-    card <- askForStartDefendingMove gameState
-    return $ putDefendingCardOnTable card gameState
+    if allCardsCovered gameState
+        then do
+            printNextRound
+            return gameState
+        else do
+            action <- if allCardsUncovered gameState
+                then askForCoverTakeOrTransitCards gameState
+                else askForCoverOrTakeCards gameState
+            return (case action of
+                Take -> takeCardsFromTable gameState
+                Transit card -> transitCard card gameState
+                Cover card -> putDefendingCardOnTable card gameState)
 
 continueDefendingMove :: GameState -> IO GameState
 continueDefendingMove gameState = do
     printState gameState
-    card <- askForContinueDefendingMove gameState
-    if isJust card
-        then continueDefendingMove (putDefendingCardOnTable (fromJust card) gameState)
-        else return gameState
+    if allCardsCovered gameState
+        then return gameState
+        else do
+            action <- askForCoverOrTakeCards gameState
+            case action of
+                Take -> return $ takeCardsFromTable gameState
+                Cover card -> continueDefendingMove (putDefendingCardOnTable card gameState)
+
+allCardsCovered :: GameState -> Bool
+allCardsCovered (GameState _ _ _ _ _ _ table) =
+    all (\ (CardPair prevCard card) -> isJust card) table
+
+allCardsUncovered :: GameState -> Bool
+allCardsUncovered (GameState _ _ _ _ _ _ table) =
+    all (\ (CardPair prevCard card) -> isNothing card) table
+
+nextRound :: GameState -> GameState
+nextRound gameState = gameState
+
+takeCardsFromTable :: GameState -> GameState
+takeCardsFromTable (GameState (Player plId name isAi hand) def pls ro deck tr table) =
+    (GameState (Player plId name isAi (hand ++ cardsOnTable)) def pls ro deck tr [])
+    where
+        cardsOnTable = concat $ map (\ cardPair@(CardPair card maybeCard) ->
+                            if isJust maybeCard
+                                then [card, (fromJust maybeCard)]
+                                else [card]) table
+
+transitCard :: Card -> GameState -> GameState
+transitCard card gameState =
+    nextPlayer $ nextDefendingPlayer $ putAttackingCardOnTable card gameState
 
 gameOver :: GameState -> Bool
 gameOver _ = False

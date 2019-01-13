@@ -1,10 +1,13 @@
 module Durak.UI
     ( printState
     , printLoser
+    , printNextRound
     , askForStartAttackingMove
     , askForContinueAttackingMove
     , askForStartDefendingMove
     , askForContinueDefendingMove
+    , askForCoverTakeOrTransitCards
+    , askForCoverOrTakeCards
     ) where
 
 import System.Console.ANSI
@@ -73,6 +76,11 @@ printLoser (GameState currentPlayer defendingPlayer otherPlayers _ _ _ _) = do
     setCursorPosition 50 50
     putStr $ (show $ name $ head (filter (\ (Player _ _ _ hand)-> length hand /= 0) (currentPlayer:defendingPlayer:otherPlayers))) ++ " lost"
 
+printNextRound :: IO()
+printNextRound = do
+    setCursorPosition 26 0
+    putStr "All cards covered. Next round"
+
 askForStartAttackingMove :: GameState -> IO Card
 askForStartAttackingMove (GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
     putStr "Choose card from your hand (1-N): "
@@ -100,3 +108,35 @@ askForContinueDefendingMove (GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
     cardNumStr <- getLine
     let cardNum = read cardNumStr :: Int
     return $ if cardNum == 0 then Nothing else Just (hand !! (cardNum - 1))
+
+askForCoverTakeOrTransitCards :: GameState -> IO DefendingAction
+askForCoverTakeOrTransitCards (GameState (Player _ _ _ hand) _ _ _ _ _ ((CardPair (Card firstCardRank _) _):_))  = do
+    putStr "Choose one card from your hand (1-N) or take cards from table (ta): "
+    action <- getLine
+    case action of
+        "ta" -> return Take
+        otherwise -> do
+            let cardNum = read action :: Int
+            let card@(Card rank _) = hand !! (cardNum - 1)
+            if rank == firstCardRank
+                then do
+                    action <- isTransitOrDefend
+                    case action of
+                        "t" -> return $ Transit card
+                        "d" -> return $ Cover card
+                else return $ Cover card
+
+isTransitOrDefend :: IO String
+isTransitOrDefend = do
+    putStr "Do you want to transit the card or defend (t/d): "
+    getLine
+
+askForCoverOrTakeCards :: GameState -> IO DefendingAction
+askForCoverOrTakeCards (GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
+    putStr "Choose one card from your hand (1-N) or take cards from table (ta): "
+    action <- getLine
+    case action of
+        "ta" -> return Take
+        otherwise -> do
+            let cardNum = read action :: Int
+            return $ Cover (hand !! (cardNum - 1))
