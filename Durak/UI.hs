@@ -1,6 +1,6 @@
 module Durak.UI
     ( printState
-    , printLoser
+    , printGameOver
     , printNextRound
     , askForStartAttackingMove
     , askForContinueAttackingMove
@@ -13,6 +13,8 @@ module Durak.UI
 import System.Console.ANSI
 import Durak.Models
 import Durak.Utils
+import Data.Maybe
+import Data.List
 
 printState :: GameState -> IO()
 printState (GameState currentPlayer defendingPlayer otherPlayers roundNum deck trump table) = do
@@ -71,11 +73,12 @@ printDefendingPlayer (Player _ name _ _) = do
     setCursorPosition 2 0
     putStr $ "Defending player: " ++ name
 
-printLoser :: GameState -> IO()
-printLoser (GameState currentPlayer defendingPlayer otherPlayers _ _ _ _) = do
-    setCursorPosition 50 50
-    putStr $ (show $ name $ head (filter (\ (Player _ _ _ hand)-> length hand /= 0) (currentPlayer:defendingPlayer:otherPlayers))) ++ " lost"
-
+printGameOver :: GameState -> IO()
+printGameOver (GameState currentPlayer defendingPlayer otherPlayers _ _ _ _) = do
+    setCursorPosition 10 50
+    putStr $ "Game Over. " ++ (if isJust loser then show (name (fromJust loser)) ++ " lost." else "")
+    where
+        loser = find (\ (Player _ _ _ hand) -> hand == []) (currentPlayer:defendingPlayer:otherPlayers)
 printNextRound :: IO()
 printNextRound = do
     setCursorPosition 26 0
