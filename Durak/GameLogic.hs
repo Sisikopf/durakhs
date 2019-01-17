@@ -7,23 +7,26 @@ import Durak.Utils
 import Data.Maybe
 import Data.List
 
+cardsInHand :: Int
+cardsInHand = 6
+
 startState :: GameState
 startState =
     (GameState currentPlayer defendingPlayer otherPlayers 1 readyDeck trump [])
     where
         readyDeck = tail deckAfterGiveaway ++ [head deckAfterGiveaway]
         trump = getSuit $ head deckAfterGiveaway
-        deckAfterGiveaway = drop 24 fullDeck
-        currentPlayer = Player 0 "You" False (take 6 fullDeck)
-        defendingPlayer = Player 1 "Trus" True (take 6 (drop 6 fullDeck))
+        deckAfterGiveaway = drop (4*cardsInHand) fullDeck
+        currentPlayer = Player 0 "You" False (take cardsInHand fullDeck)
+        defendingPlayer = Player 1 "Trus" True (take cardsInHand (drop cardsInHand fullDeck))
         otherPlayers = [
-            Player 2 "Balbes" True (take 6 (drop 12 fullDeck)),
-            Player 3 "Byvaliy" True (take 6 (drop 18 fullDeck))]
-        fullDeck = [Card rank suit | rank <- [Two .. Ace], suit <- [Clubs .. Spades]]
+            Player 2 "Balbes" True (take cardsInHand (drop (2*cardsInHand) fullDeck)),
+            Player 3 "Byvaliy" True (take cardsInHand (drop (3*cardsInHand) fullDeck))]
+        fullDeck = [Card rank suit | rank <- [Eight .. Ace], suit <- [Clubs .. Spades]]
 
 putDefendingCardOnTable :: Card -> GameState -> GameState
-putDefendingCardOnTable card (GameState (Player plId name isAi hand) def pls ro deck tr table) =
-    (GameState (Player plId name isAi newHand) def pls ro deck tr newTable)
+putDefendingCardOnTable card (GameState (Player plId name isAi hand) (Player defPlId defName defIsAi defNewHand) pls ro deck tr table) =
+    (GameState (Player plId name isAi newHand) (Player defPlId defName defIsAi newHand) pls ro deck tr newTable)
     where
         newTable =
             (take firstUncoveredPairIndex table) ++ [CardPair prevCard (Just card)] ++ (drop (firstUncoveredPairIndex + 1) table)
@@ -57,11 +60,11 @@ nextMove gameState@(GameState currentPlayer defendingPlayer _ prevRound _ _ _) =
                                                         then nextDefendingMove gameState
                                                         else nextAttackingMove gameState
     return $ (if prevRound == newRound
-                then nextPlayer newGameState
+                then nextCurrentPlayer newGameState
                 else nextRound newGameState)
 
-nextPlayer :: GameState -> GameState
-nextPlayer (GameState currentPlayer@(Player plId name isAi hand) defendingPlayer@(Player defPlId _ _ _) pls ro deck tr table) =
+nextCurrentPlayer :: GameState -> GameState
+nextCurrentPlayer (GameState currentPlayer@(Player plId name isAi hand) defendingPlayer@(Player defPlId _ _ _) pls ro deck tr table) =
     (GameState newCurrentPlayer defendingPlayer newOtherPlayers ro deck tr table)
     where
         newOtherPlayers = if newPlId == defPlId
@@ -113,15 +116,13 @@ nextDefendingMove gameState = do
 startDefendingMove :: GameState -> IO GameState
 startDefendingMove gameState@(GameState cur def pls ro deck tr table) = do
     if allCardsCovered gameState
-        then do
-            printNextRound
-            return $ GameState cur def pls (ro + 1) deck tr table
+        then return $ GameState cur def pls (ro + 1) deck tr table
         else do
             action <- if allCardsUncovered gameState
                 then askForCoverTakeOrTransitCards gameState
                 else askForCoverOrTakeCards gameState
             return (case action of
-                Take -> takeCardsFromTable gameState
+                Take -> nextCurrentPlayer $ nextDefendingPlayer $ takeCardsFromTable gameState
                 Transit card -> transitCard card gameState
                 Cover card -> putDefendingCardOnTable card gameState)
 
@@ -133,7 +134,7 @@ continueDefendingMove gameState = do
         else do
             action <- askForCoverOrTakeCards gameState
             case action of
-                Take -> return $ takeCardsFromTable gameState
+                Take -> return $ nextCurrentPlayer $ nextDefendingPlayer  $ takeCardsFromTable gameState
                 Cover card -> continueDefendingMove (putDefendingCardOnTable card gameState)
 
 allCardsCovered :: GameState -> Bool
@@ -149,8 +150,7 @@ nextRound gameState = GameState cur def pls ro deck trump []
     where
     --    changePlayers
     --    removePlayers?
-        (GameState cur def pls ro deck trump table) = nextDefendingPlayer stateAfterTookCards
-        stateAfterTookCards = takeCardsFromDeck gameState
+        (GameState cur def pls ro deck trump table) = takeCardsFromDeck $ nextDefendingPlayer gameState
 
 takeCardsFromTable :: GameState -> GameState
 takeCardsFromTable (GameState (Player plId name isAi hand) def pls ro deck tr table) =
@@ -175,12 +175,12 @@ takeCardsFromDeckForPlayer gameState@(GameState cur def pls ro deck tr table) pl
         newPlayer = Player pid name isAi newHand
         newDeck = drop cardsToTake deck
         newHand = hand ++ (take cardsToTake deck)
-        cardsToTake = min 0 (6 - (length hand))
+        cardsToTake = max 0 (cardsInHand - (length hand))
 
 
 transitCard :: Card -> GameState -> GameState
 transitCard card gameState =
-    nextPlayer $ nextDefendingPlayer $ putAttackingCardOnTable card gameState
+    nextCurrentPlayer $ nextDefendingPlayer $ putAttackingCardOnTable card gameState
 
 gameOver :: GameState -> Bool
 gameOver (GameState cur def pls _ deck _ _) =

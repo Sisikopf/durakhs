@@ -26,7 +26,7 @@ printState (GameState currentPlayer defendingPlayer otherPlayers roundNum deck t
     printTrump trump
     printTable table
     printPlayers (currentPlayer:defendingPlayer:otherPlayers)
-    setCursorPosition 26 0
+    setCursorPosition 20 0
 
 printRoundNum :: Int -> IO()
 printRoundNum roundNum = do
@@ -45,23 +45,23 @@ printTrump trump = do
 
 printTable :: Table -> IO()
 printTable table = do
-    setCursorPosition 12 20
+    setCursorPosition 9 30
     putStr $ show table
 
 printPlayers :: [Player] -> IO()
 printPlayers players = do
-    setCursorPosition 22 50
+    setCursorPosition 18 50
     printPlayer $ getPlayerById 0 players
-    setCursorPosition 12 0
+    setCursorPosition 9 0
     printPlayer $ getPlayerById 1 players
     setCursorPosition 0 50
     printPlayer $ getPlayerById 2 players
-    setCursorPosition 12 100
+    setCursorPosition 9 90
     printPlayer $ getPlayerById 3 players
 
 printPlayer :: Player -> IO()
-printPlayer (Player _ name False hand) = putStr $ show hand
-printPlayer (Player _ name True hand) = putStr $ name ++ " " ++ (show $ length hand)
+printPlayer (Player _ name _ hand) = putStr $ show hand
+--printPlayer (Player _ name True hand) = putStr $ name ++ " " ++ (show $ length hand)
 
 printCurrentPlayer :: Player -> IO()
 printCurrentPlayer (Player _ name _ _) = do
@@ -81,7 +81,7 @@ printGameOver (GameState currentPlayer defendingPlayer otherPlayers _ _ _ _) = d
         loser = find (\ (Player _ _ _ hand) -> hand == []) (currentPlayer:defendingPlayer:otherPlayers)
 printNextRound :: IO()
 printNextRound = do
-    setCursorPosition 26 0
+    setCursorPosition 20 0
     putStr "All cards covered. Next round"
 
 askForStartAttackingMove :: GameState -> IO Card
