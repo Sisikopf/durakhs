@@ -2,7 +2,8 @@ module Durak.Utils
     ( getPlayerById ) where
 
 import Durak.Models
+import Data.List
 
-getPlayerById :: Int -> [Player] -> Player
+getPlayerById :: Int -> [Player] -> Maybe Player
 getPlayerById pid players =
-    head $ filter (\ (Player playerId _ _ _) -> playerId == pid) players
+    find (\ (Player playerId _ _ _) -> playerId == pid) players

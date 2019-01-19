@@ -52,7 +52,10 @@ data Player = Player {
     name :: String,
     isAi :: Bool,
     hand :: Hand
-} deriving Eq
+}
+
+instance Eq Player where
+    (==) (Player id1 _ _ _) (Player id2 _ _ _) = id1 == id2
 
 data CardPair = CardPair Card (Maybe Card) deriving Eq
 instance Show CardPair where

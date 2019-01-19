@@ -45,7 +45,7 @@ printTrump trump = do
 
 printTable :: Table -> IO()
 printTable table = do
-    setCursorPosition 9 30
+    setCursorPosition 10 30
     putStr $ show table
 
 printPlayers :: [Player] -> IO()
@@ -59,8 +59,9 @@ printPlayers players = do
     setCursorPosition 9 90
     printPlayer $ getPlayerById 3 players
 
-printPlayer :: Player -> IO()
-printPlayer (Player _ name _ hand) = putStr $ show hand
+printPlayer :: Maybe Player -> IO()
+printPlayer Nothing = putStr ""
+printPlayer (Just (Player _ name _ hand)) = putStr $ show hand
 --printPlayer (Player _ name True hand) = putStr $ name ++ " " ++ (show $ length hand)
 
 printCurrentPlayer :: Player -> IO()
@@ -75,10 +76,10 @@ printDefendingPlayer (Player _ name _ _) = do
 
 printGameOver :: GameState -> IO()
 printGameOver (GameState currentPlayer defendingPlayer otherPlayers _ _ _ _) = do
-    setCursorPosition 10 50
-    putStr $ "Game Over. " ++ (if isJust loser then show (name (fromJust loser)) ++ " lost." else "")
+    setCursorPosition 15 50
+    putStrLn $ "Game Over. " ++ (if isJust loser then show (name (fromJust loser)) ++ " lost." else "Draw.")
     where
-        loser = find (\ (Player _ _ _ hand) -> hand == []) (currentPlayer:defendingPlayer:otherPlayers)
+        loser = find (\ (Player _ _ _ hand) -> hand /= []) (currentPlayer:defendingPlayer:otherPlayers)
 printNextRound :: IO()
 printNextRound = do
     setCursorPosition 20 0
