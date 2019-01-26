@@ -1,11 +1,8 @@
 module Durak.UI
     ( printState
     , printGameOver
-    , printNextRound
     , askForStartAttackingMove
     , askForContinueAttackingMove
-    , askForStartDefendingMove
-    , askForContinueDefendingMove
     , askForCoverTakeOrTransitCards
     , askForCoverOrTakeCards
     ) where
@@ -13,8 +10,10 @@ module Durak.UI
 import System.Console.ANSI
 import Durak.Models
 import Durak.Utils
+import Durak.Validations
 import Data.Maybe
 import Data.List
+import Text.Read
 
 printState :: GameState -> IO()
 printState (GameState currentPlayer defendingPlayer otherPlayers roundNum deck trump table) = do
@@ -80,67 +79,99 @@ printGameOver (GameState currentPlayer defendingPlayer otherPlayers _ _ _ _) = d
     putStrLn $ "Game Over. " ++ (if isJust loser then show (name (fromJust loser)) ++ " lost." else "Draw.")
     where
         loser = find (\ (Player _ _ _ hand) -> hand /= []) (currentPlayer:defendingPlayer:otherPlayers)
-printNextRound :: IO()
-printNextRound = do
-    setCursorPosition 20 0
-    putStr "All cards covered. Next round"
 
 askForStartAttackingMove :: GameState -> IO Card
-askForStartAttackingMove (GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
+askForStartAttackingMove gameState@(GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
     putStr "Choose card from your hand (1-N): "
-    cardNumStr <- getLine
-    let cardNum = read cardNumStr :: Int
-    return $ hand !! (cardNum - 1)
+    cardIndexStr <- getLine
+    let cardIndex = readMaybe cardIndexStr :: Maybe Int
+    if isCorrectCardIndex cardIndex hand
+        then return $ hand !! ((fromJust cardIndex) - 1)
+        else do
+            putStrLn "Incorrect input!"
+            askForStartAttackingMove gameState
 
 askForContinueAttackingMove :: GameState -> IO (Maybe Card)
-askForContinueAttackingMove (GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
-    putStr "Choose one more card from your hand or finish your move (0): "
-    cardNumStr <- getLine
-    let cardNum = read cardNumStr :: Int
-    return $ if cardNum == 0 then Nothing else Just (hand !! (cardNum - 1))
-
-askForStartDefendingMove :: GameState -> IO Card
-askForStartDefendingMove (GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
-    putStr "Choose card from your hand (1-N): "
-    cardNumStr <- getLine
-    let cardNum = read cardNumStr :: Int
-    return $ hand !! (cardNum - 1)
-
-askForContinueDefendingMove :: GameState -> IO (Maybe Card)
-askForContinueDefendingMove (GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
-    putStr "Choose one more card from your hand or finish your move (0): "
-    cardNumStr <- getLine
-    let cardNum = read cardNumStr :: Int
-    return $ if cardNum == 0 then Nothing else Just (hand !! (cardNum - 1))
+askForContinueAttackingMove gameState@(GameState (Player _ _ _ hand) (Player _ _ _ defHand) _ _ _ _ table) = do
+    putStr "Choose one more card from your hand (1-N) or finish your move (f): "
+    cardIndexStr <- getLine
+    case cardIndexStr of
+        "f" -> return Nothing
+        otherwise -> let cardIndex = readMaybe cardIndexStr :: Maybe Int in
+            if isCorrectCardIndex cardIndex hand
+                then if canPutAttackingCardOnTable defHand table
+                        then if thereIsCardWithSameRankOnTable (hand !! ((fromJust cardIndex) - 1)) table
+                            then return $ Just $ hand !! ((fromJust cardIndex) - 1)
+                            else do
+                                putStrLn "There is no card with the same rank on table."
+                                askForContinueAttackingMove gameState
+                        else do
+                            putStrLn "You can't put one more card on table! Finish your turn."
+                            askForContinueAttackingMove gameState
+                else do
+                    putStrLn "Incorrect input!"
+                    askForContinueAttackingMove gameState
 
 askForCoverTakeOrTransitCards :: GameState -> IO DefendingAction
-askForCoverTakeOrTransitCards (GameState (Player _ _ _ hand) _ _ _ _ _ ((CardPair (Card firstCardRank _) _):_))  = do
+askForCoverTakeOrTransitCards gameState@(GameState (Player _ _ _ hand) _ _ _ _ trump table@((CardPair (Card firstCardRank _) _):_)) = do
     putStr "Choose one card from your hand (1-N) or take cards from table (ta): "
     action <- getLine
     case action of
         "ta" -> return Take
         otherwise -> do
-            let cardNum = read action :: Int
-            let card@(Card rank _) = hand !! (cardNum - 1)
-            if rank == firstCardRank
+            let cardIndex = readMaybe action :: Maybe Int
+            if isCorrectCardIndex cardIndex hand
                 then do
-                    action <- isTransitOrDefend
-                    case action of
-                        "t" -> return $ Transit card
-                        "d" -> return $ Cover card
-                else return $ Cover card
+                    let card@(Card rank _) = hand !! ((fromJust cardIndex) - 1)
+                    if rank == firstCardRank
+                            then do
+                                action <- isTransitOrDefend
+                                case action of
+                                    "t" -> if isTransitAllowed gameState
+                                            then return $ Transit card
+                                            else do
+                                                putStrLn $ "You can't transit cards." ++
+                                                    "It's the first round or next player has too few cards in hand."
+                                                askForCoverTakeOrTransitCards gameState
+                                    "d" -> tryToCover card
+                            else tryToCover card
+                else do
+                    putStrLn "Incorrect input!"
+                    askForCoverTakeOrTransitCards gameState
+    where
+        tryToCover card = let firstUncoveredCard = fromJust $ getFirstUncoveredCard table
+                          in if isCorrectDefendingCard card firstUncoveredCard trump
+                                then return $ Cover card
+                                else do
+                                    putStrLn $ "You can't cover " ++ (show firstUncoveredCard) ++ " with " ++ (show card)
+                                    askForCoverTakeOrTransitCards gameState
 
 isTransitOrDefend :: IO String
 isTransitOrDefend = do
     putStr "Do you want to transit the card or defend (t/d): "
-    getLine
+    result <- getLine
+    case result of
+        "t" -> return result
+        "d" -> return result
+        otherwise -> isTransitOrDefend
 
 askForCoverOrTakeCards :: GameState -> IO DefendingAction
-askForCoverOrTakeCards (GameState (Player _ _ _ hand) _ _ _ _ _ _) = do
+askForCoverOrTakeCards gameState@(GameState (Player _ _ _ hand) _ _ _ _ trump table) = do
     putStr "Choose one card from your hand (1-N) or take cards from table (ta): "
     action <- getLine
     case action of
         "ta" -> return Take
         otherwise -> do
-            let cardNum = read action :: Int
-            return $ Cover (hand !! (cardNum - 1))
+            let cardIndex = readMaybe action :: Maybe Int
+            if isCorrectCardIndex cardIndex hand
+                then do
+                     let card = hand !! ((fromJust cardIndex) - 1)
+                     let firstUncoveredCard = fromJust $ getFirstUncoveredCard table
+                     if isCorrectDefendingCard card firstUncoveredCard trump
+                         then return $ Cover card
+                         else do
+                             putStrLn $ "You can't cover " ++ (show firstUncoveredCard) ++ " with " ++ (show card)
+                             askForCoverOrTakeCards gameState
+                else do
+                    putStrLn "Incorrect input!"
+                    askForCoverOrTakeCards gameState

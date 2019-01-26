@@ -1,5 +1,6 @@
 module Durak.GameLogic
-    (startGame) where
+    ( startGame
+    , nextDefendingPlayer ) where
 
 import Durak.Models
 import Durak.UI
@@ -75,22 +76,6 @@ nextCurrentPlayer (GameState currentPlayer@(Player plId _ _ _) defendingPlayer p
                                     then (pls \\ [newCurrentPlayer])
                                     else (pls \\ [newCurrentPlayer]) ++ [currentPlayer]
         newCurrentPlayer = nextActivePlayer plId (defendingPlayer:pls)
-
-nextDefendingPlayer :: GameState -> GameState
-nextDefendingPlayer (GameState currentPlayer defendingPlayer@(Player defPlId _ _ _) pls ro deck tr table) =
-    (GameState currentPlayer newDefendingPlayer (pls \\ [defendingPlayer]) ro deck tr table)
-    where
-        newDefendingPlayer = nextActivePlayer defPlId (currentPlayer:pls)
-
-nextActivePlayer :: Int -> [Player] -> Player
-nextActivePlayer pid players = if isJust foundPlayer
-                                then fromJust foundPlayer
-                                else nextActivePlayer (pid + 1) players
-    where
-        foundPlayer = find
-                        (\ (Player plid _ _ hand) -> plid == (mod (pid + 1) 4))
-                        players
-
 
 nextAttackingMove :: GameState -> IO GameState
 nextAttackingMove gameState@(GameState _ _ _ _ _ _ table) = do

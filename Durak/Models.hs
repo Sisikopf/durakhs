@@ -13,7 +13,7 @@ module Durak.Models
     , getSuit
     ) where
 
-data Rank = Two | Three | Four | Five | Six | Seven | Eight | Nine | Ten | Jack | Queen | King | Ace deriving (Enum, Eq)
+data Rank = Two | Three | Four | Five | Six | Seven | Eight | Nine | Ten | Jack | Queen | King | Ace deriving (Enum, Eq, Ord)
 instance Show Rank where
     show Two = "2"
     show Three = "3"
