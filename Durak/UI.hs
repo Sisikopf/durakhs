@@ -15,8 +15,18 @@ import Data.Maybe
 import Data.List
 import Text.Read
 
+printDebugState :: GameState -> IO()
+printDebugState (GameState currentPlayer defendingPlayer otherPlayers roundNum deck trump table) = do
+    putStrLn $ "========================="
+    putStrLn $ "Current player: " ++ (showDebugPlayer currentPlayer)
+    putStrLn $ "Defending player: " ++ (showDebugPlayer defendingPlayer)
+    putStrLn $ "Other players: " ++ (concat $ map showDebugPlayer otherPlayers)
+    putStrLn $ "Deck: " ++ (concat $ map show deck)
+    putStrLn $ "========================="
+
 printState :: GameState -> IO()
-printState (GameState currentPlayer defendingPlayer otherPlayers roundNum deck trump table) = do
+printState gameState@(GameState currentPlayer defendingPlayer otherPlayers roundNum deck trump table) = do
+    printDebugState gameState
     clearScreen
     printRoundNum roundNum
     printCurrentPlayer currentPlayer
@@ -62,6 +72,9 @@ printPlayer :: Maybe Player -> IO()
 printPlayer Nothing = putStr ""
 printPlayer (Just (Player _ name _ hand)) = putStr $ show hand
 --printPlayer (Player _ name True hand) = putStr $ name ++ " " ++ (show $ length hand)
+
+showDebugPlayer :: Player -> String
+showDebugPlayer (Player pid name isAi hand) = (show pid) ++ " " ++ name ++ " " ++ (show isAi) ++ " " ++ (show hand)
 
 printCurrentPlayer :: Player -> IO()
 printCurrentPlayer (Player _ name _ _) = do
@@ -131,7 +144,7 @@ askForCoverTakeOrTransitCards gameState@(GameState (Player _ _ _ hand) _ _ _ _ t
                                             then return $ Transit card
                                             else do
                                                 putStrLn $ "You can't transit cards." ++
-                                                    "It's the first round or next player has too few cards in hand."
+                                                    " It's the first round or next player has too few cards in hand."
                                                 askForCoverTakeOrTransitCards gameState
                                     "d" -> tryToCover card
                             else tryToCover card

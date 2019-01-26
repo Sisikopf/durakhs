@@ -1,52 +1,31 @@
 module Durak.GameLogic
-    ( startGame
-    , nextDefendingPlayer ) where
+    ( startGame ) where
 
 import Durak.Models
 import Durak.UI
+import Durak.Validations
 import Durak.Utils
 import Data.Maybe
 import Data.List
+import Control.Concurrent
 
-cardsInHand :: Int
-cardsInHand = 6
-
-startState :: GameState
-startState =
+startState :: Deck -> GameState
+startState shuffledDeck =
     (GameState currentPlayer defendingPlayer otherPlayers 1 readyDeck trump [])
     where
         readyDeck = tail deckAfterGiveaway ++ [head deckAfterGiveaway]
         trump = getSuit $ head deckAfterGiveaway
-        deckAfterGiveaway = drop (4*cardsInHand) fullDeck
-        currentPlayer = Player 0 "You" False (take cardsInHand fullDeck)
-        defendingPlayer = Player 1 "Trus" True (take cardsInHand (drop cardsInHand fullDeck))
+        deckAfterGiveaway = drop (4*cardsInHand) shuffledDeck
+        currentPlayer = Player 0 "You" False (take cardsInHand shuffledDeck)
+        defendingPlayer = Player 1 "Trus" True (take cardsInHand (drop cardsInHand shuffledDeck))
         otherPlayers = [
-            Player 2 "Balbes" True (take cardsInHand (drop (2*cardsInHand) fullDeck)),
-            Player 3 "Byvaliy" True (take cardsInHand (drop (3*cardsInHand) fullDeck))]
-        fullDeck = [Card rank suit | rank <- [Eight .. Ace], suit <- [Clubs .. Spades]]
-
-putDefendingCardOnTable :: Card -> GameState -> GameState
-putDefendingCardOnTable card (GameState cur (Player plId name isAi hand) pls ro deck tr table) =
-    (GameState newDefendingPlayer newDefendingPlayer pls ro deck tr newTable)
-    where
-        newDefendingPlayer = (Player plId name isAi newHand)
-        newTable =
-            (take firstUncoveredPairIndex table) ++ [CardPair prevCard (Just card)] ++ (drop (firstUncoveredPairIndex + 1) table)
-        firstUncoveredPair@(CardPair prevCard Nothing) = table !! firstUncoveredPairIndex
-        firstUncoveredPairIndex = fromJust $ findIndex (\ (CardPair firstCard secondCard) -> isNothing secondCard) table
-        newHand = filter (/=card) hand
-
-putAttackingCardOnTable :: Card -> GameState -> GameState
-putAttackingCardOnTable card (GameState (Player plId name isAi hand) def pls ro deck tr table) =
-    (GameState (Player plId name isAi newHand) def pls ro deck tr newTable)
-    where
-        newTable = table ++ [CardPair card Nothing]
-        newHand = filter (/=card) hand
-
+            Player 2 "Balbes" True (take cardsInHand (drop (2*cardsInHand) shuffledDeck)),
+            Player 3 "Byvaliy" True (take cardsInHand (drop (3*cardsInHand) shuffledDeck))]
 
 startGame :: IO ()
 startGame = do
-   mainCycle startState
+   shuffledDeck <- shuffleList [Card rank suit | rank <- [Eight .. Ace], suit <- [Clubs .. Spades]]
+   mainCycle $ startState shuffledDeck
 
 mainCycle :: GameState -> IO ()
 mainCycle state = do
@@ -66,17 +45,6 @@ nextMove gameState@(GameState currentPlayer defendingPlayer _ prevRound _ _ _) =
                 then nextCurrentPlayer newGameState
                 else nextRound newGameState)
 
-nextCurrentPlayer :: GameState -> GameState
-nextCurrentPlayer (GameState currentPlayer@(Player plId _ _ _) defendingPlayer pls ro deck tr table) =
-    (GameState newCurrentPlayer defendingPlayer newOtherPlayers ro deck tr table)
-    where
-        newOtherPlayers = if newCurrentPlayer == defendingPlayer
-                            then pls ++ [currentPlayer]
-                            else if currentPlayer == defendingPlayer
-                                    then (pls \\ [newCurrentPlayer])
-                                    else (pls \\ [newCurrentPlayer]) ++ [currentPlayer]
-        newCurrentPlayer = nextActivePlayer plId (defendingPlayer:pls)
-
 nextAttackingMove :: GameState -> IO GameState
 nextAttackingMove gameState@(GameState _ _ _ _ _ _ table) = do
     newnewGameState <- (if table == []
@@ -88,17 +56,16 @@ nextAttackingMove gameState@(GameState _ _ _ _ _ _ table) = do
     return newnewGameState
 
 startAttackingMove :: GameState -> IO GameState
-startAttackingMove gameState = do
-    card <- askForStartAttackingMove gameState
-    return $ putAttackingCardOnTable card gameState
+startAttackingMove gameState@(GameState (Player _ _ isAi _) _ _ _ _ _ _) =
+    if isAi
+        then startComputerAttackingMove gameState
+        else startHumanAttackingMove gameState
 
 continueAttackingMove :: GameState -> IO GameState
-continueAttackingMove gameState = do
-    printState gameState
-    card <- askForContinueAttackingMove gameState
-    if isJust card
-        then continueAttackingMove (putAttackingCardOnTable (fromJust card) gameState)
-        else return gameState
+continueAttackingMove gameState@(GameState (Player _ _ isAi _) _ _ _ _ _ _) =
+    if isAi
+        then continueComputerAttackingMove gameState
+        else continueHumanAttackingMove gameState
 
 nextDefendingMove :: GameState -> IO GameState
 nextDefendingMove gameState = do
@@ -108,28 +75,16 @@ nextDefendingMove gameState = do
     return newNewGameState
 
 startDefendingMove :: GameState -> IO GameState
-startDefendingMove gameState@(GameState cur def pls ro deck tr table) = do
-    if allCardsCovered gameState
-        then return $ GameState cur def pls (ro + 1) deck tr table
-        else do
-            action <- if allCardsUncovered gameState
-                then askForCoverTakeOrTransitCards gameState
-                else askForCoverOrTakeCards gameState
-            return (case action of
-                Take -> nextCurrentPlayer $ nextDefendingPlayer $ takeCardsFromTable gameState
-                Transit card -> transitCard card gameState
-                Cover card -> putDefendingCardOnTable card gameState)
+startDefendingMove gameState@(GameState (Player _ _ isAi _) _ _ _ _ _ _) = do
+    if isAi
+        then startComputerDefendingMove gameState
+        else startHumanDefendingMove gameState
 
 continueDefendingMove :: GameState -> IO GameState
-continueDefendingMove gameState = do
-    printState gameState
-    if allCardsCovered gameState
-        then return gameState
-        else do
-            action <- askForCoverOrTakeCards gameState
-            case action of
-                Take -> return $ nextCurrentPlayer $ nextDefendingPlayer $ takeCardsFromTable gameState
-                Cover card -> continueDefendingMove (putDefendingCardOnTable card gameState)
+continueDefendingMove gameState@(GameState (Player _ _ isAi _) _ _ _ _ _ _) = do
+    if isAi
+        then continueComputerDefendingMove gameState
+        else continueHumanDefendingMove gameState
 
 allCardsCovered :: GameState -> Bool
 allCardsCovered (GameState _ _ _ _ _ _ table) =
@@ -145,8 +100,8 @@ nextRound gameState = if curHand == []
                         else gameStateWithoutInactivePlayersAndEmptyTable
     where
         gameStateWithoutInactivePlayersAndEmptyTable@(GameState (Player _ _ _ curHand) _ _ _ _ _ _) =
-            (GameState cur def (filter (\ (Player _ _ _ hand) -> hand /= []) pls) ro deck trump [])
-        (GameState cur def pls ro deck trump table) = nextDefendingPlayer $ takeCardsFromDeck $ gameState
+            nextDefendingPlayer (GameState cur def (filter (\ (Player _ _ _ hand) -> hand /= []) pls) ro deck trump [])
+        (GameState cur def pls ro deck trump table) = takeCardsFromDeck gameState
 
 takeCardsFromTable :: GameState -> GameState
 takeCardsFromTable (GameState (Player plId name isAi hand) def pls ro deck tr table) =
@@ -160,12 +115,11 @@ takeCardsFromTable (GameState (Player plId name isAi hand) def pls ro deck tr ta
 
 takeCardsFromDeck :: GameState -> GameState
 takeCardsFromDeck gameState@(GameState cur def pls _ _ _ _) =
-    foldl takeCardsFromDeckForPlayer gameState (pls ++ [def] ++ [cur])
+    foldl takeCardsFromDeckForPlayer gameState (pls ++ [def])
 
 takeCardsFromDeckForPlayer :: GameState -> Player -> GameState
 takeCardsFromDeckForPlayer gameState@(GameState cur def pls ro deck tr table) player@(Player pid name isAi hand)
-    |    cur == player = GameState newPlayer def pls ro newDeck tr table
-    |    def == player = GameState cur newPlayer pls ro newDeck tr table
+    |    cur == player || def == player = GameState newPlayer newPlayer pls ro newDeck tr table
     |    otherwise = let playerIndex = fromJust (elemIndex player pls) in
                 GameState cur def ((take playerIndex pls) ++ [newPlayer] ++ (drop (playerIndex + 1) pls)) ro newDeck tr table
     where
@@ -182,3 +136,119 @@ transitCard card gameState =
 gameOver :: GameState -> Bool
 gameOver (GameState cur def pls _ deck _ _) =
     deck == [] && length (filter (\ (Player _ _ _ hand) -> hand /= []) (cur:def:pls)) < 2
+
+startHumanAttackingMove :: GameState -> IO GameState
+startHumanAttackingMove gameState = do
+    card <- askForStartAttackingMove gameState
+    return $ putAttackingCardOnTable card gameState
+
+continueHumanAttackingMove :: GameState -> IO GameState
+continueHumanAttackingMove gameState = do
+    printState gameState
+    card <- askForContinueAttackingMove gameState
+    if isJust card
+        then continueAttackingMove (putAttackingCardOnTable (fromJust card) gameState)
+        else return gameState
+
+startHumanDefendingMove :: GameState -> IO GameState
+startHumanDefendingMove gameState@(GameState cur def pls ro deck tr table) = do
+    if allCardsCovered gameState
+        then return $ GameState cur def pls (ro + 1) deck tr table
+        else do
+            action <- if allCardsUncovered gameState
+                then askForCoverTakeOrTransitCards gameState
+                else askForCoverOrTakeCards gameState
+            return (case action of
+                Take -> nextCurrentPlayer $ nextDefendingPlayer $ takeCardsFromTable gameState
+                Transit card -> transitCard card gameState
+                Cover card -> putDefendingCardOnTable card gameState)
+
+continueHumanDefendingMove :: GameState -> IO GameState
+continueHumanDefendingMove gameState = do
+    printState gameState
+    if allCardsCovered gameState
+        then return gameState
+        else do
+            action <- askForCoverOrTakeCards gameState
+            case action of
+                Take -> return $ nextCurrentPlayer $ nextDefendingPlayer $ takeCardsFromTable gameState
+                Cover card -> continueDefendingMove (putDefendingCardOnTable card gameState)
+
+startComputerAttackingMove :: GameState -> IO GameState
+startComputerAttackingMove gameState@(GameState (Player _ name _ hand) _ _ _ _ trump _) = do
+    putStr $ name ++ " thinks..."
+    threadDelay(computerMovesDelay)
+    let card = findCardWithMinimumRank hand trump
+    return $ putAttackingCardOnTable card gameState
+
+continueComputerAttackingMove :: GameState -> IO GameState
+continueComputerAttackingMove gameState@(GameState (Player _ name _ curHand) (Player _ _ _ defHand) _ _ _ trump table@((CardPair card _):_)) = do
+    printState gameState
+    putStr $ name ++ " thinks..."
+    threadDelay(computerMovesDelay)
+    if canPutAttackingCardOnTable defHand table
+        then do
+            let card = findCardToContinueAttack curHand table trump
+            if isJust card
+                then continueComputerAttackingMove (putAttackingCardOnTable (fromJust card) gameState)
+                else return gameState
+        else return gameState
+
+startComputerDefendingMove :: GameState -> IO GameState
+startComputerDefendingMove gameState@(GameState cur def@(Player _ name _ hand) pls ro deck tr table@((CardPair card _):_)) = do
+    if allCardsCovered gameState
+        then return $ GameState cur def pls (ro + 1) deck tr table
+        else do
+            putStr $ name ++ " thinks..."
+            threadDelay(computerMovesDelay)
+            let foundCard = findCardToTransit hand card tr
+            if isJust foundCard
+                then return $ transitCard (fromJust foundCard) gameState
+                else do
+                    let foundCard = findCardToCover hand (fromJust $ getFirstUncoveredCard table) tr
+                    if isJust foundCard
+                        then return $ putDefendingCardOnTable (fromJust foundCard) gameState
+                        else return $ nextCurrentPlayer $ nextDefendingPlayer $ takeCardsFromTable gameState
+
+continueComputerDefendingMove :: GameState -> IO GameState
+continueComputerDefendingMove gameState@(GameState (Player _ name _ hand) _ _ _ _ tr table@((CardPair card _):_)) = do
+    printState gameState
+    if allCardsCovered gameState
+        then return gameState
+        else do
+            putStr $ name ++ " thinks..."
+            threadDelay(computerMovesDelay)
+            let foundCard = findCardToCover hand (fromJust $ getFirstUncoveredCard table) tr
+            if isJust foundCard
+                then continueDefendingMove $ putDefendingCardOnTable (fromJust foundCard) gameState
+                else return $ nextCurrentPlayer $ nextDefendingPlayer $ takeCardsFromTable gameState
+
+findCardWithMinimumRank :: Hand -> Trump -> Card
+findCardWithMinimumRank hand trump =
+    minimum $ if notTrumps == [] then hand else notTrumps
+    where
+        notTrumps = filter (\ (Card _ suit) -> suit /= trump) hand
+
+findCardToContinueAttack :: Hand -> Table -> Trump -> Maybe Card
+findCardToContinueAttack [] _ _ = Nothing
+findCardToContinueAttack hand table trump =
+    find (\ card -> thereIsCardWithSameRankOnTable card table)
+         (sort $ filter (\ (Card _ suit) -> suit /= trump) hand)
+
+findCardToTransit :: Hand -> Card -> Trump -> Maybe Card
+findCardToTransit [] _ _ = Nothing
+findCardToTransit hand (Card rank _) trump =
+    find (\ (Card r _) -> r == rank)
+         (filter (\ (Card _ suit) -> suit /= trump) hand)
+
+findCardToCover :: Hand -> Card -> Trump -> Maybe Card
+findCardToCover [] _ _ = Nothing
+findCardToCover hand cardToCover trump =
+    if isJust suitableNotTrump
+        then suitableNotTrump
+        else suitableTrump
+    where
+        suitableTrump = find (\ coveringCard -> isCorrectDefendingCard coveringCard cardToCover trump) trumps
+        suitableNotTrump = find (\ coveringCard -> isCorrectDefendingCard coveringCard cardToCover trump) notTrumps
+        trumps = sort $ filter (\ (Card _ suit) -> suit == trump) hand
+        notTrumps = sort $ filter (\ (Card _ suit) -> suit /= trump) hand

@@ -45,6 +45,9 @@ instance Show Card where
     showList (card:[]) = (\y -> show card)
     showList (card:cards) = (\y -> show card ++ " " ++ (show cards))
 
+instance Ord Card where
+    (Card rank1 _) `compare` (Card rank2 _) = rank1 `compare` rank2
+
 type Hand = [Card]
 type Deck = [Card]
 data Player = Player {
