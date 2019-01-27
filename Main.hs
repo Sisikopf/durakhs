@@ -31,5 +31,5 @@ main = startGame
         7. смена игрока работает неправильно (как-то связано с 6) +
         8. игра стартует всегда с меня
         9. иногда игрок не выходит из игры без карт +
-        10. Durak/GameLogic.hs:(214,1)-(224,100): Non-exhaustive patterns in function continueComputerDefendingMove
+        10. Durak/GameLogic.hs:(214,1)-(224,100): Non-exhaustive patterns in function continueComputerDefendingMove +
 -}

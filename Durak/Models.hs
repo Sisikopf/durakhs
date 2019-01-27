@@ -10,7 +10,6 @@ module Durak.Models
     , Table(..)
     , GameState(..)
     , DefendingAction(..)
-    , getSuit
     ) where
 
 data Rank = Two | Three | Four | Five | Six | Seven | Eight | Nine | Ten | Jack | Queen | King | Ace deriving (Enum, Eq, Ord)
@@ -37,8 +36,8 @@ instance Show Suit where
     show Spades = "♠"
 
 type Trump = Suit
+
 data Card = Card Rank Suit deriving Eq
-getSuit (Card _ suit) = suit
 instance Show Card where
     show (Card rank suit) = show rank ++ (show suit)
     showList [] = (\y -> "")
@@ -50,6 +49,7 @@ instance Ord Card where
 
 type Hand = [Card]
 type Deck = [Card]
+
 data Player = Player {
     id :: Int,
     name :: String,
@@ -69,6 +69,7 @@ instance Show CardPair where
     showList (cardPair:cardPairs) = (\y -> show cardPair ++ " " ++ (show cardPairs))
 
 type Table = [CardPair]
+
 data GameState = GameState {
                     currentPlayer :: Player,
                     defendingPlayer :: Player,

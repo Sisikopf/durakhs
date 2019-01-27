@@ -14,8 +14,7 @@ isCorrectCardIndex Nothing _ = False
 isCorrectCardIndex (Just cardIndex) hand = cardIndex >= 1 && cardIndex <= (length hand)
 
 canPutAttackingCardOnTable :: Hand -> Table -> Bool
-canPutAttackingCardOnTable defHand table =
-    pairsLength < 6 && uncoveredPairsLength < defHandLength
+canPutAttackingCardOnTable defHand table = pairsLength < cardsInHand && uncoveredPairsLength < defHandLength
     where
         uncoveredPairsLength = length $ filter (\ (CardPair firstCard secondCard) -> isNothing secondCard) table
         pairsLength = length table

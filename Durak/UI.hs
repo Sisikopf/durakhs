@@ -15,18 +15,9 @@ import Data.Maybe
 import Data.List
 import Text.Read
 
-printDebugState :: GameState -> IO()
-printDebugState (GameState currentPlayer defendingPlayer otherPlayers roundNum deck trump table) = do
-    putStrLn $ "========================="
-    putStrLn $ "Current player: " ++ (showDebugPlayer currentPlayer)
-    putStrLn $ "Defending player: " ++ (showDebugPlayer defendingPlayer)
-    putStrLn $ "Other players: " ++ (concat $ map showDebugPlayer otherPlayers)
-    putStrLn $ "Deck: " ++ (concat $ map show deck)
-    putStrLn $ "========================="
-
 printState :: GameState -> IO()
 printState gameState@(GameState currentPlayer defendingPlayer otherPlayers roundNum deck trump table) = do
-    printDebugState gameState
+    printStateDebugInfo gameState
     clearScreen
     printRoundNum roundNum
     printCurrentPlayer currentPlayer
@@ -36,6 +27,18 @@ printState gameState@(GameState currentPlayer defendingPlayer otherPlayers round
     printTable table
     printPlayers (currentPlayer:defendingPlayer:otherPlayers)
     setCursorPosition 20 0
+
+printStateDebugInfo :: GameState -> IO()
+printStateDebugInfo (GameState currentPlayer defendingPlayer otherPlayers roundNum deck trump table) = do
+    putStrLn $ "========================="
+    putStrLn $ "Current player: " ++ (getPlayerDebugInfo currentPlayer)
+    putStrLn $ "Defending player: " ++ (getPlayerDebugInfo defendingPlayer)
+    putStrLn $ "Other players: " ++ (concat $ map getPlayerDebugInfo otherPlayers)
+    putStrLn $ "Deck: " ++ (concat $ map show deck)
+    putStrLn $ "========================="
+
+getPlayerDebugInfo :: Player -> String
+getPlayerDebugInfo (Player pid name isAi hand) = (show pid) ++ " " ++ name ++ " " ++ (show isAi) ++ " " ++ (show hand) ++ " "
 
 printRoundNum :: Int -> IO()
 printRoundNum roundNum = do
@@ -54,12 +57,12 @@ printTrump trump = do
 
 printTable :: Table -> IO()
 printTable table = do
-    setCursorPosition 10 30
+    setCursorPosition 9 30
     putStr $ show table
 
 printPlayers :: [Player] -> IO()
 printPlayers players = do
-    setCursorPosition 18 50
+    setCursorPosition 18 40
     printPlayer $ getPlayerById 0 players
     setCursorPosition 9 0
     printPlayer $ getPlayerById 1 players
@@ -70,11 +73,8 @@ printPlayers players = do
 
 printPlayer :: Maybe Player -> IO()
 printPlayer Nothing = putStr ""
-printPlayer (Just (Player _ name _ hand)) = putStr $ show hand
---printPlayer (Player _ name True hand) = putStr $ name ++ " " ++ (show $ length hand)
-
-showDebugPlayer :: Player -> String
-showDebugPlayer (Player pid name isAi hand) = (show pid) ++ " " ++ name ++ " " ++ (show isAi) ++ " " ++ (show hand)
+printPlayer (Just (Player _ _ False hand)) = putStr $ show hand
+printPlayer (Just (Player _ name True hand)) = putStr $ name ++ " " ++ (show $ length hand)
 
 printCurrentPlayer :: Player -> IO()
 printCurrentPlayer (Player _ name _ _) = do
@@ -110,13 +110,16 @@ askForContinueAttackingMove gameState@(GameState (Player _ _ _ hand) (Player _ _
     cardIndexStr <- getLine
     case cardIndexStr of
         "f" -> return Nothing
-        otherwise -> let cardIndex = readMaybe cardIndexStr :: Maybe Int in
+        otherwise ->
+            let cardIndex = readMaybe cardIndexStr :: Maybe Int in
             if isCorrectCardIndex cardIndex hand
                 then if canPutAttackingCardOnTable defHand table
-                        then if thereIsCardWithSameRankOnTable (hand !! ((fromJust cardIndex) - 1)) table
-                            then return $ Just $ hand !! ((fromJust cardIndex) - 1)
+                        then
+                            let chosenCard = hand !! ((fromJust cardIndex) - 1) in
+                            if thereIsCardWithSameRankOnTable chosenCard table
+                            then return $ Just chosenCard
                             else do
-                                putStrLn "There is no card with the same rank on table."
+                                putStrLn $ "There is no card on table with the same rank as " ++ show chosenCard
                                 askForContinueAttackingMove gameState
                         else do
                             putStrLn "You can't put one more card on table! Finish your turn."
@@ -141,23 +144,23 @@ askForCoverTakeOrTransitCards gameState@(GameState (Player _ _ _ hand) _ _ _ _ t
                                 action <- isTransitOrDefend
                                 case action of
                                     "t" -> if isTransitAllowed gameState
-                                            then return $ Transit card
-                                            else do
-                                                putStrLn $ "You can't transit cards." ++
+                                               then return $ Transit card
+                                               else do
+                                                   putStrLn $ "You can't transit cards." ++
                                                     " It's the first round or next player has too few cards in hand."
-                                                askForCoverTakeOrTransitCards gameState
+                                                   askForCoverTakeOrTransitCards gameState
                                     "d" -> tryToCover card
                             else tryToCover card
                 else do
                     putStrLn "Incorrect input!"
                     askForCoverTakeOrTransitCards gameState
     where
-        tryToCover card = let firstUncoveredCard = fromJust $ getFirstUncoveredCard table
-                          in if isCorrectDefendingCard card firstUncoveredCard trump
-                                then return $ Cover card
-                                else do
-                                    putStrLn $ "You can't cover " ++ (show firstUncoveredCard) ++ " with " ++ (show card)
-                                    askForCoverTakeOrTransitCards gameState
+        tryToCover card = let firstUncoveredCard = fromJust $ getFirstUncoveredCard table in
+                          if isCorrectDefendingCard card firstUncoveredCard trump
+                              then return $ Cover card
+                              else do
+                                  putStrLn $ "You can't cover " ++ (show firstUncoveredCard) ++ " with " ++ (show card)
+                                  askForCoverTakeOrTransitCards gameState
 
 isTransitOrDefend :: IO String
 isTransitOrDefend = do

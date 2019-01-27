@@ -2,6 +2,9 @@ module Durak.Utils
     ( cardsInHand
     , getPlayerById
     , getFirstUncoveredCard
+    , getSuit
+    , allCardsCovered
+    , allCardsUncovered
     , nextCurrentPlayer
     , nextDefendingPlayer
     , nextActivePlayer
@@ -31,8 +34,10 @@ shuffleList as = do
     return $ (as !! i) : shuffledRest
 
 getPlayerById :: Int -> [Player] -> Maybe Player
-getPlayerById pid players =
-    find (\ (Player playerId _ _ _) -> playerId == pid) players
+getPlayerById pid players = find (\ (Player playerId _ _ _) -> playerId == pid) players
+
+getSuit :: Card -> Suit
+getSuit (Card _ suit) = suit
 
 getFirstUncoveredCard :: Table -> Maybe Card
 getFirstUncoveredCard table =
@@ -40,6 +45,15 @@ getFirstUncoveredCard table =
     where
         firstCardFromPair Nothing = Nothing
         firstCardFromPair (Just (CardPair first _)) = Just first
+
+allCardsCovered :: GameState -> Bool
+allCardsCovered (GameState _ _ _ _ _ _ table) =
+    all (\ (CardPair prevCard card) -> isJust card) table
+
+allCardsUncovered :: GameState -> Bool
+allCardsUncovered (GameState _ _ _ _ _ _ table) =
+    all (\ (CardPair prevCard card) -> isNothing card) table
+
 
 nextCurrentPlayer :: GameState -> GameState
 nextCurrentPlayer (GameState currentPlayer@(Player plId _ _ _) defendingPlayer pls ro deck tr table) =
